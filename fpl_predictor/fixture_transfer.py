@@ -220,20 +220,20 @@ def monte_carlo_player_prediction(
 
 
 # Predict fixutres
-def predict_fixture_1(df, fixtures_1, team_stats, predict_fixture_func,  n_simulations=10000):
+def predict_fixture(df, fixtures, team_stats, predict_fixture_func,  n_simulations=10000):
     """
-    Predict all players for all fixtures in fixtures_1.
+    Predict all players for all fixtures in fixtures.
     
     Parameters:
     - df: historical player data
-    - fixtures_1: list of tuples [(home_team, away_team), ...]
+    - fixtures: list of tuples [(home_team, away_team), ...]
     - team_stats: dataframe with defensive and offensive strength
     - n_simulations: number of MC simulations per player
     """
     
     all_predictions = []
     
-    for home_team, away_team in fixtures_1:
+    for home_team, away_team in fixtures:
         print(f"\nProcessing: {home_team} vs {away_team}")
         # Get team stats
         if home_team not in team_stats.index or away_team not in team_stats.index:
@@ -317,7 +317,9 @@ def predict_fixture_1(df, fixtures_1, team_stats, predict_fixture_func,  n_simul
             pred['fixture_difficulty'] = home_def_normalized
             all_predictions.append(pred)
     
-    return pd.DataFrame(all_predictions)
+    all_predictions = pd.DataFrame(all_predictions)
+    all_predictions[["ci_lower", "ci_upper"]] = all_predictions["ci_95"].apply(get_bounds)
+    return all_predictions
 
 def get_bounds(val):
     if isinstance(val, (tuple, list)) and len(val) >= 2:

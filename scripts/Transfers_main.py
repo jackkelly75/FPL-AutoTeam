@@ -10,92 +10,66 @@ import heapq
 from typing import Dict, List, Tuple, Any
 from decimal import Decimal, ROUND_DOWN
 import sys
-sys.path.append(r"C:\Users\jackk\Desktop\FPL")
-from transfer_recom import *
-from team_stats import *
-from fixture_transfer import *
-from import_data_func import *
-
-# Import data
-df = import_player_data()
+#import custom functions
+from fpl_predictor import transfer_recom
+from fpl_predictor import team_prob
+from fpl_predictor import fixture_transfer
+from fpl_predictor import import_data_func
 
 
-#drop this bloke out
-df = df[~((df.first_name == 'Callum') & (df.second_name == 'Wilson'))]
-
-
-
-
-git clone https://github.com/yourname/fpl-predictor.git
-cd fpl-predictor
-pip install -e .
-
-
-
-
-from fpl_predictor import run_predictions
-
-results = run_predictions(gameweek=20)
-print(results)
-
-
-
-
-
-#Squad info
+#Set Squad info - does not import from FPL as this will not be most recent team
 entry_id = 4311890   # replace with your entry id
-left_in_budget = 1.1
-gw = 16
+left_in_budget = 2.6
+gw = 17
 
 my_squad_15 = {
         'GK': ['Petrović', 'Sánchez'],
-        'DEF': ['J.Timber', 'Chalobah', 'Muñoz', 'Tarkowski', 'Van den Berg'],
-        'MID': ['Saka', 'Enzo', 'J.Palhinha', 'Wilson', 'Kudus'],
+        'DEF': ['J.Timber', 'Kayode',  'Van den Berg', 'Chalobah', 'Tarkowski'],
+        'MID': ['Saka', 'Anthony', 'Enzo', 'Wilson', 'Kudus'],
         'FWD': ['Woltemade', 'Thiago', 'Haaland'],
     }
-my_squad_15_array = ['Petrović', 'Sánchez', 'J.Timber', 'Chalobah', 'Muñoz', 'Tarkowski', 'Van den Berg',
-                     'Saka', 'Enzo', 'J.Palhinha', 'Wilson', 'Kudus','Woltemade', 'Thiago', 'Haaland']
 
-player_position_map = {
-   'Petrović':'GK', 'Sánchez':'GK', 
-   'J.Timber':'DEF', 'Chalobah':'DEF', 'Muñoz':'DEF', 'Tarkowski':'DEF', 'Van den Berg':'DEF', 
-   'Saka':'MID',   'Enzo':'MID',   'J.Palhinha':'MID',   'Wilson':'MID',   'Kudus':'MID',
-   'Woltemade':'FWD',     'Thiago':'FWD',     'Haaland':'FWD',  
- }
+my_squad_15_array, player_position_map = import_data_func.transform_squad(my_squad_15)
+
+
+# Import data
+#Import stats for all players who have played at least one minute this season
+df = import_data_func.import_player_data(num_mins = 1)
+'''
+['player_id', 'first_name', 'second_name', 'team_id', 'team_name',
+       'element_type', 'gameweek', 'kickoff_time', 'minutes', 'G', 'xG',
+       'assists', 'xassists', 'clean_sheets', 'goals_conceded',
+       'x_goals_conceded', 'own_goals', 'clearances_blocks_interceptions',
+       'defensive_contribution', 'penalties_saved', 'penalties_missed',
+       'yellow_cards', 'red_cards', 'saves', 'bonus', 'bps', 'influence',
+       'creativity', 'threat', 'ict_index', 'total_points', 'was_home',
+       'opponent_team_name', 'now_cost', 'player_name']
+'''
+#drop this bloke out
+df = df[~((df.first_name == 'Callum') & (df.second_name == 'Wilson'))]
+
 
 # ----- Cost of players
 #cost of all players to buy now
 player_cost = df[(df.gameweek == max(df.gameweek))][['player_name', 'now_cost']]
 #cost of my players if sold
-transfers = get_squad_worth(entry_id, df, my_squad_15_array)
+transfers = import_data_func.get_squad_worth(entry_id, df, my_squad_15_array)
 squad_cost = round(transfers['sell_price'].sum(), 1)
 squad_cost = squad_cost + left_in_budget
 
+constraints = import_data_func.constraints
 
-# Set constraints (customize as needed)
-constraints = {
-    'GK': 1,
-    'DEF': {'min': 3, 'max': 5},
-    'MID': {'min': 2, 'max': 5},
-    'FWD': {'min': 1, 'max': 3}
-}
 
-# Example: get fixtures for gameweek 1
-fixture_1 = fixtures_for_event(gw)
-fixture_2 = fixtures_for_event(gw+1)
-fixture_3 = fixtures_for_event(gw+2)
-fixture_4 = fixtures_for_event(gw+3)
-fixture_5 = fixtures_for_event(gw+4)
-fixture_6 = fixtures_for_event(gw+5)
-fixture_7 = fixtures_for_event(gw+6)
+# Loop through fixtures up to week ahead you want
+fixtures = []
+for i in range(7): # next 7 gameweeks
+    fixtures.append(import_data_func.fixtures_for_event(gw + i))
 
-# ----------- Find predictiosn for next 7 weeks
-print("=" * 80)
-print("FANTASY PREMIER LEAGUE - GAMEWEEK 1 PREDICTIONS")
-print("=" * 80)
-#calculte team stats
-#team_stats = calculate_team_stats(df)
-team_stats, meta = calculate_team_stats_dixon_coles_ewma(df, use_rho=True, rho_init=0.0, halflife_gw=5.0)
+
+# ----------- Find predictiosn
+#use dixon coles model to predict next gameweeks
+team_stats, meta = team_prob.calculate_team_stats_dixon_coles_ewma(df, use_rho=True, rho_init=0.0, halflife_gw=5.0)
+
 
 '''
 pred = meta['predict_fixture']('Man Utd','Arsenal')
@@ -103,157 +77,68 @@ print(pred['expected_goals_home'], pred['expected_goals_away'])
 print(pred['probabilities']['home_win'], pred['probabilities']['draw'], pred['probabilities']['away_win'])
 '''
 
-# Run predictions for all fixtures
-predictions_df_1 = predict_fixture_1(df, fixture_1,  team_stats, predict_fixture_func = meta['predict_fixture'], n_simulations=10000)
-predictions_df_1[["ci_lower", "ci_upper"]] = predictions_df_1["ci_95"].apply(get_bounds)
+# Run predictions for all fixtures in the fixtures list
+predictions_dfs = []
 
-predictions_df_2 = predict_fixture_1(df, fixture_2,  team_stats, predict_fixture_func = meta['predict_fixture'], n_simulations=10000)
-predictions_df_2[["ci_lower", "ci_upper"]] = predictions_df_2["ci_95"].apply(get_bounds)
-
-predictions_df_3 = predict_fixture_1(df, fixture_3,  team_stats, predict_fixture_func = meta['predict_fixture'], n_simulations=10000)
-predictions_df_3[["ci_lower", "ci_upper"]] = predictions_df_3["ci_95"].apply(get_bounds)
-
-predictions_df_4 = predict_fixture_1(df, fixture_4,  team_stats, predict_fixture_func = meta['predict_fixture'], n_simulations=10000)
-predictions_df_4[["ci_lower", "ci_upper"]] = predictions_df_4["ci_95"].apply(get_bounds)
-
-predictions_df_5 = predict_fixture_1(df, fixture_5,  team_stats, predict_fixture_func = meta['predict_fixture'], n_simulations=10000)
-predictions_df_5[["ci_lower", "ci_upper"]] = predictions_df_5["ci_95"].apply(get_bounds)
-
-predictions_df_6 = predict_fixture_1(df, fixture_6,  team_stats, predict_fixture_func = meta['predict_fixture'], n_simulations=10000)
-predictions_df_6[["ci_lower", "ci_upper"]] = predictions_df_6["ci_95"].apply(get_bounds)
-
-predictions_df_7 = predict_fixture_1(df, fixture_7,  team_stats, predict_fixture_func = meta['predict_fixture'], n_simulations=10000)
-predictions_df_7[["ci_lower", "ci_upper"]] = predictions_df_7["ci_95"].apply(get_bounds)
+for fixture in fixtures:
+    pred_df = fixture_transfer.predict_fixture(
+        df,
+        fixture,
+        team_stats,
+        predict_fixture_func=meta['predict_fixture'],
+        n_simulations=10000
+    )
+    #pred_df[["ci_lower", "ci_upper"]] = pred_df["ci_95"].apply(fixture_transfer.get_bounds)
+    predictions_dfs.append(pred_df)
 
 
-#sort injuered or banned players for weeks out
-#will ahve to decide if you think people will be out for certain number of weeks yourself if now known
-#can also be used for cup of nations
+#-----------------
+# Handling injured or banned players
+#-----------------
+# I'm sure there is a way to import injured players from API
+# Instea I have just supplied players I have on my team or big players who won't be playing
+# This will impute thier predictions for these weeks with 0
+predictions_dfs = import_data_func.set_player_out_multiple(predictions_dfs,  'Longstaff', weeks=5)
+predictions_dfs = import_data_func.set_player_out_multiple(predictions_dfs,  'Muñoz', weeks=4)
 
-predictions_df_1 = set_player_out(predictions_df_1, 'Longstaff')
-predictions_df_2 = set_player_out(predictions_df_2, 'Longstaff')
-predictions_df_3 = set_player_out(predictions_df_3, 'Longstaff')
-predictions_df_4 = set_player_out(predictions_df_4, 'Longstaff')
-predictions_df_5 = set_player_out(predictions_df_5, 'Longstaff')
-predictions_df_6 = set_player_out(predictions_df_6, 'Longstaff')
-predictions_df_7 = set_player_out(predictions_df_7, 'Longstaff')
-
-predictions_df_1 = set_player_out(predictions_df_1, 'Muñoz')
-predictions_df_2 = set_player_out(predictions_df_2, 'Muñoz')
-predictions_df_3 = set_player_out(predictions_df_3, 'Muñoz')
-predictions_df_4 = set_player_out(predictions_df_4, 'Muñoz')
-predictions_df_5 = set_player_out(predictions_df_5, 'Muñoz')
-predictions_df_6 = set_player_out(predictions_df_6, 'Muñoz')
-
-#ACON
-acon = ['Salah','Ouattara','Foster','Sarr','Ndiaye','Iwobi',
+#There is if AFCON is happening can bulk remove from list
+afcon = ['Salah','Ouattara','Foster','Sarr','Ndiaye','Iwobi',
 'Salah','Ait-Nouri','Marmoush','Mbeumo','Wissa','Aina',
 'Wan-Bissaka','Diouf','Agbadou']
 
-for player_acon in acon:
-	predictions_df_2 = set_player_out(predictions_df_2, player_acon)
-	predictions_df_3 = set_player_out(predictions_df_3, player_acon)
-	predictions_df_4 = set_player_out(predictions_df_4, player_acon)
+#if afcon is in future, you can set delay within set_player_out_multiple() for the number of weeks in future it is
+for player_acon in afcon:
+    predictions_dfs = import_data_func.set_player_out_multiple(predictions_dfs,  player_acon, weeks=4)
 
 
 
-# Combine all predictions
-predictions_dict = {
-	1: predictions_df_1,
-    2: predictions_df_2,
-    3: predictions_df_3,
-    4: predictions_df_4,
-    5: predictions_df_5,
-    6: predictions_df_6,
-    7: predictions_df_7
-}
 
-print("\n" + "=" * 80)
-print("SUMMARY STATISTICS")
-print("=" * 80)
 
-# Overall stats
-print(f"\nTotal players analyzed: {len(predictions_df_1)}")
-print(f"Average predicted points per player: {predictions_df_1['mean'].mean():.2f}")
-print(f"Expected points across all fixtures: {predictions_df_1['mean'].sum():.2f}")
 
-# Best value picks (high points, high reliability)
-print("\n" + "=" * 80)
-print("TOP 5 PREDICTIONS (Highest Expected Points)")
-print("=" * 80)
-
-top_20 = predictions_df_1.nlargest(5, 'mean')
+#---------
+# View expected top 20 players for next gameweek
+#---------
+print("#------------expected top 20 players for next gameweek")
+top_20 = predictions_dfs[0].nlargest(20, 'mean')
 print(top_20[['player', 'position', 'team', 'opponent', 'venue', 'mean', 'ci_lower',
-	'ci_upper', 'prob_double_digit']].to_string(index=False))
-
-
-# Best upside plays (high ceiling)
-print("\n" + "=" * 80)
-print("HIGHEST UPSIDE (95th percentile ceiling)")
-print("=" * 80)
-upside = predictions_df_1.nlargest(3, 'ci_upper')
+    'ci_upper', 'prob_double_digit']].to_string(index=False))
+print("#------------highest upper confidence interval players for next gameweek")
+upside = predictions_dfs[0].nlargest(10, 'ci_upper')
 print(upside[['player', 'position', 'team', 'opponent', 'venue', 'mean', 'ci_lower',
 	'ci_upper', 'prob_double_digit']].to_string(index=False))
-'''
-# By fixture
-print("\n" + "=" * 80)
-print("PREDICTIONS BY FIXTURE")
-print("=" * 80)
-for fixture in predictions_df_1['matchup'].unique():
-    fixture_preds = predictions_df_1[predictions_df_1['matchup'] == fixture]
-    print(f"\n{fixture}")
-    print(f"  Expected total points: {fixture_preds['mean'].sum():.2f}")
-    print(f"  Top 5 scorers:")
-    top_5_fixture = fixture_preds.nlargest(5, 'mean')
-    for _, player in top_5_fixture.iterrows():
-        print(f"    {player['player']:30} ({player['position']:3}) - " +
-              f"{player['mean']:5.1f} pts (CI: {player['ci_lower']:5.1f}-{player['ci_upper']:5.1f})")
-# By team
-print("\n" + "=" * 80)
-print("EXPECTED POINTS BY TEAM")
-print("=" * 80)
-team_totals = predictions_df_1.groupby('team').agg({
-    'mean': 'sum',
-    'player': 'count'
-}).rename(columns={'player': 'players'}).sort_values('mean', ascending=False)
-print(team_totals.to_string())
-
-# Export full predictions
-print("\n" + "=" * 80)
-print("FULL PREDICTIONS TABLE")
-print("=" * 80)
-output_cols = ['player_name', 'position', 'team', 'opponent', 'venue', 'predicted_points_mean', 
-               'predicted_points_std', 'ci_lower', 'ci_upper', 'prob_zero_points', 'prob_positive_points', 
-               'prob_double_digit', 'minutes_played_rate']
-print(predictions_df_2[output_cols].sort_values('predicted_points_mean', ascending=False).to_string(index=False))
-'''
-# Optional: Save to CSV
-# predictions_df_1.to_csv('fpl_gameweek_1_predictions.csv', index=False)
-# print("\nPredictions saved to 'fpl_gameweek_1_predictions.csv'")
 
 
-# Step 1: Calculate team offensive and defensive stats
-print("Predicted results")
-for fixture in fixture_1:
-	pred = meta['predict_fixture'](fixture[0],fixture[1])
-	print(f"#--- {fixture} ---#")
-	print(f"{fixture[0]} win: {round(pred['probabilities']['home_win'], 2)}")
-	print(f"Draw: {round(pred['probabilities']['draw'], 2)}")
-	print(f"{fixture[1]} win: {round(pred['probabilities']['away_win'], 2)}")
-
-
-# Optimise line up
-optimized_lineups = optimize_lineups_for_weeks(predictions_dict, my_squad_15, df, constraints)
+#---------
+# Select startting 11 from current team linup
+#---------
+optimized_lineups = fixture_transfer.optimize_lineups_for_weeks(predictions_dfs, my_squad_15, df, constraints)
 
 
 
 
-
-predictions_list = [predictions_df_1, predictions_df_2, predictions_df_3,
-     predictions_df_4, predictions_df_5, predictions_df_6, predictions_df_7]
-
+# combine all weeks into one dataframe
 predictions_combined = []
-for i, preds in enumerate(predictions_list, start=1):
+for i, preds in enumerate(predictions_dfs, start=1):
     tmp = preds.copy()
     tmp['week'] = i
     predictions_combined.append(tmp)
@@ -280,7 +165,7 @@ BENCH_WEIGHT = 0.1          # weight for bench predicted points in objective
 # optimize_lineups_for_weeks(predictions_df, squad_15, df, constraints) -> returns dict-like with [1]['total_points']
 
 player_position_map = predictions_combined.set_index('player')['position'].to_dict()
-plan = plan_transfers_beam_search(my_squad_15, predictions_combined, player_cost, player_position_map, optimize_lineups_for_weeks, afcon_bonus_week =1, horizon_weeks = HORIZON_WEEKS , beam_width = BEAM_WIDTH, budget_cap = BUDGET_CAP, df=df, constraints=constraints)
+plan = transfer_recom.plan_transfers_beam_search(my_squad_15, predictions_combined, player_cost, player_position_map, fixture_transfer.optimize_lineups_for_weeks, afcon_bonus_week =1, horizon_weeks = HORIZON_WEEKS , beam_width = BEAM_WIDTH, budget_cap = BUDGET_CAP, df=df, constraints=constraints)
 
 #edit 
 # --- Notes and tuning ---

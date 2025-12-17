@@ -11,6 +11,13 @@ from datetime import datetime, timezone
 BASE = "https://fantasy.premierleague.com/api"
 
 
+# Set constraints (customize as needed)
+constraints = {
+    'GK': 1,
+    'DEF': {'min': 3, 'max': 5},
+    'MID': {'min': 2, 'max': 5},
+    'FWD': {'min': 1, 'max': 3}
+}
 #----- Functions to get fixtures for gameweek
 def fetch_json(url, session=None):
     s = session or requests.Session()
@@ -126,13 +133,13 @@ def import_player_data(num_mins = 1):
 	players_data = players_data[['id', 'now_cost', 'web_name']]
 	players_data = players_data.rename(columns={"id": "player_id"})
 	save_data = save_data.merge(players_data, on = ['player_id'], how  = 'inner')
-    #clean some data 
-    save_data = save_data.rename(columns={"web_name": "player_name"})
-    save_data = save_data.rename(columns={"round": "gameweek"})
-    save_data = save_data.rename(columns={"team": "team_name"})
-    save_data['now_cost'] = save_data['now_cost']/10
-    #reduce down to players who have played at least num_mins this season
-    save_data = save_data[save_data.groupby('player_name')['minutes'].transform('sum') >= 1]
+	#clean some data 
+	save_data = save_data.rename(columns={"web_name": "player_name"})
+	save_data = save_data.rename(columns={"round": "gameweek"})
+	save_data = save_data.rename(columns={"team": "team_name"})
+	save_data['now_cost'] = save_data['now_cost']/10
+	#reduce down to players who have played at least num_mins this season
+	save_data = save_data[save_data.groupby('player_name')['minutes'].transform('sum') >= 1]
 	return save_data
 
 
@@ -167,6 +174,7 @@ def get_squad_worth(entry_id, df, my_squad_15_array):
 	transfers['sell_price'] = transfers.apply(compute_sell, axis=1)
 	transfers['sell_price'] = np.round(transfers['sell_price'], 1)
 	return transfers
+
 
 def set_player_out(df: pd.DataFrame, player: str, *,
                         mean: float = 0.0,
@@ -209,3 +217,52 @@ def set_player_out(df: pd.DataFrame, player: str, *,
     df.at[idx, 'ci_95'] = ci_95
     return df
 
+def transform_squad(squad_dict):
+    # Flatten into array
+    squad_array = []
+    player_position_map = {}
+    
+    for position, players in squad_dict.items():
+        for player in players:
+            if player:  # skip empty entries
+                squad_array.append(player)
+                player_position_map[player] = position
+    
+    return squad_array, player_position_map
+
+
+def set_player_out_multiple(predictions_list, player, weeks=None, delay = 0, **kwargs):
+    """
+    Apply set_player_out to multiple prediction DataFrames.
+
+    Parameters
+    ----------
+    predictions_list : list of pd.DataFrame
+        The list of prediction outputs (e.g. predictions_dfs).
+    player : str
+        The player name to update.
+    weeks : int or None
+        Number of weeks to apply the update. If None, applies to all.
+    kwargs : dict
+        Extra keyword arguments passed to set_player_out (mean, median, etc.).
+
+    Returns
+    -------
+    updated_list : list of pd.DataFrame
+        The updated DataFrames.
+    """
+    if weeks is None:
+        weeks = len(predictions_list)  - delay
+
+    updated_list = []
+    for i, df in enumerate(predictions_list):
+        if i < delay:
+            # skip until delay is passed
+            updated_list.append(df)
+        elif i < delay + weeks:
+            updated_df = set_player_out(df, player, **kwargs)
+            updated_list.append(updated_df)
+        else:
+            updated_list.append(df)
+
+    return updated_list

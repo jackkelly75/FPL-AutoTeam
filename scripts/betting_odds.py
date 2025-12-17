@@ -55,8 +55,8 @@ def betting_decision(odds: Dict[str, float],
 
 
 
-for i in range(0, len(fixture_1)):
-	fixture = fixture_1[i]
+for i in range(0, len(fixtures[0])):
+	fixture = fixtures[0][i]
 	print("#-------------------------------#")
 	print(fixture)
 	pred = meta['predict_fixture'](fixture[0],fixture[1])
@@ -143,8 +143,8 @@ def betting_plan_from_lists(prob_list: List[Dict[str, np.float64]],
 
 prob_list = []
 
-for i in range(0, len(fixture_1)):
-	fixture = fixture_1[i]
+for i in range(0, len(fixtures[0])):
+	fixture = fixtures[0][i]
 	print("#-------------------------------#")
 	print(fixture)
 	pred = meta['predict_fixture'](fixture[0],fixture[1])
@@ -155,26 +155,31 @@ for i in range(0, len(fixture_1)):
 
 
 odds_list = [
-    {'home': 1.62, 'draw': 4.00, 'away': 5.25},
-    {'home': 1.70, 'draw': 4.00, 'away': 4.40},
-    {'home': 3.80, 'draw': 3.50, 'away': 1.95},
-    {'home': 1.20, 'draw': 6.00, 'away': 14.00},
-    {'home': 3.80, 'draw': 3.75, 'away': 1.88},
-    {'home': 2.38, 'draw': 3.40, 'away': 2.88},
-    {'home': 3.40, 'draw': 3.35, 'away': 2.15},
-    {'home': 3.75, 'draw': 3.60, 'away': 1.91},
-    {'home': 1.98, 'draw': 3.50, 'away': 3.75},
-    {'home': 1.88, 'draw': 3.90, 'away': 3.75}
+    {'home': 2.60, 'draw': 3.5, 'away': 2.5},
+    {'home': 1.47, 'draw': 4.4, 'away': 6.5},
+    {'home': 1.61, 'draw': 4.00, 'away': 5.00},
+    {'home': 1.20, 'draw': 7.00, 'away': 11.00},
+    {'home': 3.5, 'draw': 3.4, 'away': 2.05},
+    {'home': 3.4, 'draw': 3.6, 'away': 2.05},
+    {'home': 5.5, 'draw': 3.8, 'away': 1.61},
+    {'home': 2.70, 'draw': 3.25, 'away': 2.6},
+    {'home': 2.05, 'draw': 3.6, 'away': 3.3},
+    {'home': 2.2, 'draw': 3.3, 'away': 3.2}
 ]
 
 
 
-plan = betting_plan_from_lists(prob_list, odds_list, bankroll=8, min_edge = 0.5)
+plan = betting_plan_from_lists(prob_list, odds_list, bankroll=20, min_edge = 0.5)
 for row in plan:
     if row['bet'] == True:
-    	print(fixture_1[row['fixture']])
+    	print(fixtures[0][row['fixture']])
     	print(row)
 
+numbers = [0.24, 0.09, 0.49, 0.21, 0.4, 0.48]
+target_sum = 20
+current_sum = sum(numbers)
+# Scale each number so the new list sums to target_sum
+scaled = [num * target_sum / current_sum for num in numbers]
 
 
 
